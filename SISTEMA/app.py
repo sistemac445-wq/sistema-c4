@@ -13,17 +13,29 @@ import logging
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN DE LA BD ---
-# Intentamos leer la variable de Railway, si no existe (local), usamos la de localhost
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost/SISTEMA')
+# 1. Intentamos leer la variable de entorno de Railway
+database_url = os.environ.get('DATABASE_URL')
+
+if database_url:
+    # 2. Corrección para Railway: SQLAlchemy requiere 'mysql+pymysql://'
+    if database_url.startswith("mysql://"):
+        database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # 3. Configuración para desarrollo local (XAMPP/WAMP/Laragon)
+    # Asegúrate de que tu base de datos local se llame 'SISTEMA'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/SISTEMA'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mi_clave_secreta_y_segura_para_sistema_tickets') 
 
+# Inicialización de la base de datos
 db = SQLAlchemy(app)
-# --- LOGIN ---
+
+# --- CONFIGURACIÓN DE LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
 # Carpeta de fotos
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
