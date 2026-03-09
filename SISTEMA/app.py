@@ -906,22 +906,14 @@ def crear_admin_inicial():
 # ---------------------- RUN ----------------------
 with app.app_context():
     db.create_all()
-    # No necesitas importar User si ya está en este archivo app.py
-    admin_existente = User.query.filter_by(username='admin').first()
-    
-    if not admin_existente:
-        # Usamos la contraseña 'admin123'
-        pass_hash = generate_password_hash('admin123')
-        nuevo_admin = User(
-            username='admin', 
-            password=pass_hash, 
-            role='admin'
-        )
+    # Intentamos crear el admin de nuevo pero de forma segura
+    admin_root = User.query.filter_by(username='admin').first()
+    if not admin_root:
+        nuevo_admin = User(username='admin', role='Admin', sector='Soporte')
+        nuevo_admin.set_password('admin123') # Aquí usamos la función del modelo
         db.session.add(nuevo_admin)
         db.session.commit()
-        print("¡Usuario admin creado con éxito!")
-    else:
-        print("El usuario admin ya existe.")
+        print("ADMIN CREADO")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
