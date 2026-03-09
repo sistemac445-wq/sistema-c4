@@ -903,8 +903,11 @@ def crear_admin_inicial():
             print("ADMIN CREADO -> usuario: admin  pass: adminpass")
 
 # ---------------------- RUN ----------------------
+with app.app_context():
+    db.create_all()
+    print("Tablas creadas exitosamente.")
+
 if __name__ == '__main__':
-    import os
-    # Forzamos a que lea el puerto de Railway o use el 5000 por defecto
+    # Railway asigna el puerto dinámicamente, por eso usamos os.environ.get
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
