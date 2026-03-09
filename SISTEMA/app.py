@@ -13,12 +13,12 @@ import logging
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN DE LA BD ---
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/SISTEMA'
+# Intentamos leer la variable de Railway, si no existe (local), usamos la de localhost
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost/SISTEMA')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'mi_clave_secreta_y_segura_para_sistema_tickets' 
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mi_clave_secreta_y_segura_para_sistema_tickets') 
 
 db = SQLAlchemy(app)
-
 # --- LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
