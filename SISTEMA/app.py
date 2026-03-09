@@ -905,9 +905,11 @@ def crear_admin_inicial():
 # ---------------------- RUN ----------------------
 with app.app_context():
     db.create_all()
-    print("Tablas creadas exitosamente.")
-
-if __name__ == '__main__':
-    # Railway asigna el puerto dinámicamente, por eso usamos os.environ.get
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    # Verificar si ya existe el admin para no duplicarlo
+    from your_models_file import User # Asegúrate de importar tu modelo User
+    if not User.query.filter_by(username='admin').first():
+        hashed_password = generate_password_hash('admin123')
+        nuevo_admin = User(username='admin', password=hashed_password, role='admin')
+        db.session.add(nuevo_admin)
+        db.session.commit()
+        print("Usuario administrador inicial creado.")
