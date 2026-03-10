@@ -1,44 +1,47 @@
 import os
 import logging
-import datetime
-from flask import Flask
+import datetime  # Importado correctamente para evitar el NameError
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_login import LoginManager, UserMixin
-# Configuración básica de logs para ver qué pasa en el despliegue
+from flask_login import LoginManager, UserMixin, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash 
+
+# Configuración de logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN DE LA BD ---
-# Intentamos obtener la URL desde el entorno (Railway la inyecta automáticamente)
 database_url = os.environ.get('DATABASE_URL')
 
 logger.info(f"--- Intentando conectar con DATABASE_URL detectada ---")
 
 if database_url:
-    # Ajuste de protocolo para SQLAlchemy + PyMySQL
+    # Ajuste de protocolo para Railway
     if database_url.startswith("mysql://"):
         database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
     
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     logger.info("Configuración exitosa: Usando base de datos remota de Railway.")
 else:
-    # Fallback solo para desarrollo local (tu laptop)
-    logger.warning("!!! AVISO: No se detectó DATABASE_URL. Usando conexión local (localhost). !!!")
+    logger.warning("!!! AVISO: No se detectó DATABASE_URL. Usando localhost. !!!")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/SISTEMA'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mi_clave_secreta_y_segura_para_sistema_tickets') 
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_tickets') 
 
-# Inicialización de la base de datos
 db = SQLAlchemy(app)
 
 # --- CONFIGURACIÓN DE LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Carpeta de fotos
+UPLOAD_FOLDER = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Carpeta de fotos
 UPLOAD_FOLDER = 'static/uploads'
@@ -906,29 +909,29 @@ def crear_admin_inicial():
             print("ADMIN CREADO -> usuario: admin  pass: adminpass")
 
 # ---------------------- RUN ----------------------
-# ---------------------- RUN ----------------------
+# ---------------------- INICIALIZACIÓN DE BD Y ADMIN ----------------------
 with app.app_context():
-    db.create_all()
-    # Buscamos si ya existe el admin
-    admin_root = User.query.filter_by(username='admin').first()
-    
-    if not admin_root:
-        # IMPORTANTE: No pasamos 'password' en el constructor 
-        # porque tu columna se llama 'password_hash'
-        nuevo_admin = User(
-            username='admin', 
-            role='Admin', 
-            sector='Soporte'
-        )
-        # Usamos tu función set_password que ya maneja 'password_hash'
-        nuevo_admin.set_password('admin123') 
+    try:
+        db.create_all()
+        admin_root = User.query.filter_by(username='admin').first()
         
-        db.session.add(nuevo_admin)
-        db.session.commit()
-        print("¡ADMINISTRADOR CREADO EXITOSAMENTE!")
-    else:
-        print("El administrador ya existe en la base de datos.")
+        if not admin_root:
+            nuevo_admin = User(
+                username='admin', 
+                role='Admin', 
+                sector='Soporte'
+            )
+            nuevo_admin.set_password('admin123') 
+            db.session.add(nuevo_admin)
+            db.session.commit()
+            logger.info("¡ADMINISTRADOR CREADO EXITOSAMENTE!")
+        else:
+            logger.info("El administrador ya existe en la base de datos.")
+    except Exception as e:
+        logger.error(f"Error inicializando la base de datos: {e}")
 
+# ---------------------- EJECUCIÓN ----------------------
 if __name__ == '__main__':
+    # Esto se usa en local (python app.py)
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
