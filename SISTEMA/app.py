@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash 
+from flask_login import login_required
 
 # Configuración de logs
 logging.basicConfig(level=logging.INFO)
@@ -932,6 +933,5 @@ with app.app_context():
 
 # ---------------------- EJECUCIÓN ----------------------
 if __name__ == '__main__':
-    # Esto se usa en local (python app.py)
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
