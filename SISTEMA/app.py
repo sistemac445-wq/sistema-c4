@@ -15,26 +15,27 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN DE LA BD ---
+# --- CONFIGURACIÓN DE LA BD ---
 database_url = os.environ.get('DATABASE_URL')
 
-logger.info(f"--- Intentando conectar con DATABASE_URL detectada ---")
+app.logger.info("--- Intentando conectar con DATABASE_URL detectada ---")
 
 if database_url:
-    # Ajuste de protocolo para Railway
+    # Ajuste automático de protocolo para Railway
     if database_url.startswith("mysql://"):
         database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
     
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-    logger.info("Configuración exitosa: Usando base de datos remota de Railway.")
+    app.logger.info("Configuración exitosa: Usando base de datos remota de Railway.")
 else:
-    logger.warning("!!! AVISO: No se detectó DATABASE_URL. Usando localhost. !!!")
+    # Configuración para local si no hay variable de entorno
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/SISTEMA'
+    app.logger.warning("!!! AVISO: No se detectó DATABASE_URL. Usando localhost. !!!")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_tickets') 
+app.config['SECRET_KEY'] = 'mi_clave_secreta_y_segura_para_sistema_tickets' 
 
 db = SQLAlchemy(app)
-
 # --- CONFIGURACIÓN DE LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
