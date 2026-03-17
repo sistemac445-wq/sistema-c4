@@ -917,26 +917,25 @@ def crear_admin_inicial():
 # ---------------------- RUN ----------------------
 # ---------------------- INICIALIZACIÓN DE BD Y ADMIN ----------------------
 with app.app_context():
-    try:
-        db.create_all()
-        admin_root = User.query.filter_by(username='admin').first()
-        
-        if not admin_root:
-            nuevo_admin = User(
-                username='admin', 
-                role='Admin', 
-                sector='Soporte'
-            )
-            nuevo_admin.set_password('admin123') 
-            db.session.add(nuevo_admin)
-            db.session.commit()
-            logger.info("¡ADMINISTRADOR CREADO EXITOSAMENTE!")
-        else:
-            logger.info("El administrador ya existe en la base de datos.")
-    except Exception as e:
-        logger.error(f"Error inicializando la base de datos: {e}")
-
+    db.create_all()  # Crea las tablas si no existen
+    
+    # Buscamos si ya existe el admin para no duplicarlo
+    from models import User  # Asegúrate de importar tu modelo User
+    admin = User.query.filter_by(username='admin').first()
+    
+    if not admin:
+        hashed_password = generate_password_hash('admin123', method='pbkdf2:sha256')
+        new_admin = User(
+            username='admin',
+            password=hashed_password,
+            rol='admin' # O el campo que uses para el rol
+        )
+        db.session.add(new_admin)
+        db.session.commit()
+        logger.info("✅ Administrador creado exitosamente: usuario 'admin', clave 'admin123'")
+    else:
+        logger.info("ℹ️ El administrador ya existe en la base de datos.")
 # ---------------------- EJECUCIÓN ----------------------
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               

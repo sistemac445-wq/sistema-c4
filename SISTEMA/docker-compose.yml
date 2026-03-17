@@ -1,0 +1,24 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql_sistema
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+      - MYSQL_DATABASE=sistema  # Cambiado para coincidir con tu conexión
+    ports:
+      - "3306:3306"
+    volumes:
+      - sistema_data:/var/lib/mysql
+
+  backend:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    environment:
+      # Conexión: usuario root, sin contraseña, al host 'db'
+      - DATABASE_URL=mysql+pymysql://root:@db/sistema
+
+volumes:
+  sistema_data:
