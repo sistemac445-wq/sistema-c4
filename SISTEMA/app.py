@@ -216,15 +216,14 @@ def logout():
     return redirect(url_for('login'))
 
 
-@app.route('/dashboard')
+@app.route('/admin/dashboard')
 @login_required
-def dashboard():
-    if current_user.role == 'Admin':
-        return redirect(url_for('admin_dashboard'))
-    if current_user.role == 'Tecnico':
-        return redirect(url_for('tecnico_dashboard'))
-    return redirect(url_for('oficial_dashboard'))
-
+def admin_dashboard():
+    if current_user.role != 'Admin':
+        # En lugar de redirect(url_for('dashboard')), mándalo fuera
+        flash("No tienes permiso de Administrador.", "danger")
+        return redirect(url_for('login')) 
+    return render_template('admin_dashboard.html', user=current_user)
 
 # ---------------------- DASHBOARD ADMIN ----------------------
 
