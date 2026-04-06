@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Importación de fuente para asegurar consistencia */
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
 
         body {
@@ -24,6 +23,12 @@
             overflow-x: hidden;
         } 
 
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            perspective: 1000px;
+        }
+
         .card {
             border-radius: 20px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -31,8 +36,6 @@
             background: #ffffff;
             overflow: hidden;
             transition: transform 0.3s ease;
-            max-width: 400px;
-            width: 100%;
         }
 
         .card-header {
@@ -44,15 +47,10 @@
         }
 
         .logo-img {
-            width: 120px; /* Ajustado para que se vea mejor el logo circular */
+            width: 110px;
             height: auto;
             margin-bottom: 1rem;
             filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
-            transition: transform 0.3s ease;
-        }
-
-        .logo-img:hover {
-            transform: scale(1.05);
         }
 
         .card-body { 
@@ -62,15 +60,14 @@
         .form-label { 
             font-weight: 600; 
             color: #1e293b; 
-            margin-bottom: 0.5rem;
             font-size: 0.9rem;
         }
         
         .input-group {
             border-radius: 12px;
             overflow: hidden;
-            transition: all 0.3s ease;
             border: 1.5px solid #e2e8f0;
+            transition: all 0.3s ease;
         }
 
         .input-group:focus-within {
@@ -82,19 +79,12 @@
             background: #f8fafc; 
             border: none;
             color: #64748b;
-            padding: 0 15px;
         }
 
         .form-control { 
             border: none;
-            padding: 12px 15px;
-            font-size: 16px !important; 
-            color: #1e293b;
-        }
-
-        .form-control:focus {
-            box-shadow: none;
-            outline: none;
+            padding: 12px;
+            font-size: 16px; 
         }
 
         .btn-primary {
@@ -103,48 +93,24 @@
             padding: 14px;
             border-radius: 12px;
             font-weight: 600;
-            margin-top: 1rem;
-            font-size: 1rem;
-            letter-spacing: 0.5px;
-            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
+            transition: all 0.3s ease;
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(5, 8, 223, 0.3);
-            opacity: 0.95;
-        }
-
-        .card-footer {
-            background: #f8fafc !important;
-            border-top: 1px solid #f1f5f9 !important;
-            padding: 1.2rem !important;
-        }
-
-        .link-contacto {
-            color: #0508df;
-            font-weight: 700;
-            text-decoration: none;
-            transition: color 0.2s;
         }
 
         .security-text {
             margin-top: 2rem;
-            color: rgba(255,255,255,0.5);
+            color: rgba(255,255,255,0.6);
             font-size: 0.75rem;
-            font-weight: 500;
             text-align: center;
-        }
-
-        .contact-box {
-            background: #f1f5f9;
-            border-radius: 12px;
-            border: 1px dashed #0004ff;
-            padding: 15px;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -153,7 +119,7 @@
 <div class="login-container">
     <div class="card">
         <div class="card-header">
-            <img src="{{ url_for('static', filename='LOGO1.png') }}" alt="Logo" class="logo-img">
+            <img src="{{ url_for('static', filename='images/LOGO1.png') }}" alt="Logo C4" class="logo-img">
             <h1 class="h5 mb-1 fw-bold">Reportes C4</h1>
             <p class="small mb-0 text-white-50">Sistema de Control de Operaciones</p>
         </div>
@@ -172,7 +138,7 @@
                     <label class="form-label">Nombre de Usuario</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-user-circle"></i></span>
-                        <input type="text" class="form-control" name="username" placeholder="Ingrese su usuario" required>
+                        <input type="text" class="form-control" name="username" placeholder="Usuario" required>
                     </div>
                 </div>
                 
@@ -191,33 +157,31 @@
             </form>
         </div>
         
-        <div class="card-footer text-center">
+        <div class="card-footer bg-light text-center py-3 border-top">
             <p class="text-muted small mb-0">
                 ¿Necesitas ayuda? 
-                <a href="#" class="link-contacto ms-1" data-bs-toggle="modal" data-bs-target="#soporteModal">Contactar Soporte</a>
+                <a href="#" class="text-primary fw-bold text-decoration-none" data-bs-toggle="modal" data-bs-target="#soporteModal">Soporte</a>
             </p>
         </div>
     </div>
     
-    <div class="security-text">
-        <i class="fas fa-shield-check me-1"></i> 
-        SISTEMA OFICIAL DE SEGURIDAD PÚBLICA EL MARQUES
+    <div class="security-text text-uppercase">
+        <i class="fas fa-shield-halved me-1"></i> 
+        Sistema oficial de seguridad pública El Marqués
     </div>
 </div>
 
 <div class="modal fade" id="soporteModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
+    <div class="modal-content border-0 shadow">
       <div class="modal-header bg-dark text-white">
         <h5 class="modal-title">Soporte Técnico</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body text-center py-4">
-        <p class="text-muted small">Para problemas de acceso, contacte al administrador:</p>
-        <div class="contact-box">
-            <a href="mailto:jsuarez@elmarques.gob.mx" class="h5 fw-bold text-primary text-decoration-none">
-                jsuarez@elmarques.gob.mx
-            </a>
+        <p class="text-muted mb-3">Contacte al administrador para restablecer su cuenta:</p>
+        <div class="p-3 bg-light rounded border border-primary border-dashed">
+            <a href="mailto:jsuarez@elmarques.gob.mx" class="h6 fw-bold text-primary">jsuarez@elmarques.gob.mx</a>
         </div>
       </div>
     </div>
