@@ -6,21 +6,18 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_required, current_user, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix  # ✅ FIX 1: Importar ProxyFix
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# --- CONFIGURACIÓN DE LOGS ---
+# --- LOGS ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- APP ---
 app = Flask(__name__)
-
-# ✅ FIX 1: Aplicar ProxyFix ANTES de cualquier config
-# Esto le dice a Flask que confíe en los headers X-Forwarded-* de Railway
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-# --- CONFIGURACIÓN DE LA BASE DE DATOS ---
+# --- BASE DE DATOS ---
 database_url = os.environ.get('DATABASE_URL')
-
 if database_url:
     if database_url.startswith("mysql://"):
         database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
@@ -33,27 +30,26 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_tickets')
 
-# ✅ FIX 1: Cookies seguras — Railway maneja HTTPS, ProxyFix lo detecta correctamente ahora
+# --- COOKIES (UN SOLO BLOQUE, SIN DUPLICADOS) ---
 app.config.update(
-    SESSION_COOKIE_SECURE=True if database_url else False,
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
 )
 
 db = SQLAlchemy(app)
 
-# --- CONFIGURACIÓN DE LOGIN ---
+# --- LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = None
 
-# Carpeta para archivos
+# --- UPLOADS ---
 UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ✅ FIX 2: Definir ROLES_DISPONIBLES que faltaba
 ROLES_DISPONIBLES = ['Admin', 'Tecnico', 'Usuario']
 
 # ---------------------- MODELOS ----------------------
@@ -90,7 +86,6 @@ class EquipoReporte(db.Model):
     foto_reparado_path = db.Column(db.String(255), nullable=True)
     user = db.relationship('User', backref=db.backref('equipo_reportes', lazy=True))
 
-# ✅ FIX 3: Definir PatrullaReporte que faltaba completamente
 class PatrullaReporte(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -108,7 +103,6 @@ class PatrullaReporte(db.Model):
     observaciones = db.Column(db.Text)
     foto_falla_path = db.Column(db.String(255), nullable=True)
     foto_reparado_path = db.Column(db.String(255), nullable=True)
-    # Cámaras y grabadoras
     camara1_funciona = db.Column(db.Boolean, default=True)
     camara2_funciona = db.Column(db.Boolean, default=True)
     camara3_funciona = db.Column(db.Boolean, default=True)
@@ -135,7 +129,6 @@ class PatrullaReporte(db.Model):
     falla_grabadora_foto_4 = db.Column(db.String(255))
     user = db.relationship('User', backref=db.backref('patrulla_reportes', lazy=True))
 
-# ✅ FIX 4: Definir guardar_foto que faltaba
 def guardar_foto(foto):
     if foto and foto.filename != '':
         try:
@@ -149,12 +142,11 @@ def guardar_foto(foto):
             app.logger.error(f"Error al guardar foto: {e}")
     return None
 
-# --- FUNCIONES DE APOYO ---
 @app.context_processor
 def inject_now():
     return {'now': datetime.datetime.utcnow}
 
-# --------------------- RUTAS ------------------------
+# ---------------------- RUTAS ----------------------
 
 @app.route('/')
 def index():
@@ -170,7 +162,6 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
         try:
             user = User.query.filter_by(username=username).first()
             if user and user.check_password(password):
@@ -190,13 +181,19 @@ def dashboard():
         return redirect(url_for('admin_dashboard'))
     elif current_user.role == 'Tecnico':
         return redirect(url_for('tecnico_dashboard'))
-    return redirect(url_for('oficial_dashboard'))
+    elif current_user.role == 'Usuario':
+        return redirect(url_for('oficial_dashboard'))
+    else:
+        logout_user()
+        flash(f'Rol "{current_user.role}" no reconocido. Contacta al administrador.', 'danger')
+        return redirect(url_for('login'))
 
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
     if current_user.role != 'Admin':
-        return redirect(url_for('dashboard'))
+        logout_user()
+        return redirect(url_for('login'))
     return render_template('admin_dashboard.html', user=current_user)
 
 @app.route('/logout')
@@ -213,7 +210,7 @@ def logout():
 def admin_usuarios():
     if current_user.role != 'Admin':
         flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -226,8 +223,7 @@ def admin_usuarios():
             usuarios = User.query.order_by(User.username).all()
             return render_template('admin_usuarios.html', user=current_user, usuarios=usuarios, roles=ROLES_DISPONIBLES)
 
-        usuario_existente = User.query.filter_by(username=username).first()
-        if usuario_existente:
+        if User.query.filter_by(username=username).first():
             flash('El nombre de usuario ya existe.', 'danger')
             usuarios = User.query.order_by(User.username).all()
             return render_template('admin_usuarios.html', user=current_user, usuarios=usuarios, roles=ROLES_DISPONIBLES)
@@ -252,8 +248,7 @@ def admin_usuarios():
 @login_required
 def admin_editar_usuario(user_id):
     if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     usuario = User.query.get_or_404(user_id)
 
@@ -267,8 +262,8 @@ def admin_editar_usuario(user_id):
             flash('Usuario y rol son obligatorios.', 'danger')
             return render_template('admin_editar_usuario.html', user=current_user, usuario=usuario, roles=ROLES_DISPONIBLES)
 
-        usuario_existente = User.query.filter_by(username=username).first()
-        if usuario_existente and usuario_existente.id != user_id:
+        existente = User.query.filter_by(username=username).first()
+        if existente and existente.id != user_id:
             flash('El nombre de usuario ya existe.', 'danger')
             return render_template('admin_editar_usuario.html', user=current_user, usuario=usuario, roles=ROLES_DISPONIBLES)
 
@@ -293,15 +288,13 @@ def admin_editar_usuario(user_id):
 @login_required
 def admin_eliminar_usuario(user_id):
     if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     if user_id == current_user.id:
         flash('No puedes eliminar tu propio usuario.', 'danger')
         return redirect(url_for('admin_usuarios'))
 
     usuario = User.query.get_or_404(user_id)
-
     try:
         db.session.delete(usuario)
         db.session.commit()
@@ -314,25 +307,23 @@ def admin_eliminar_usuario(user_id):
     return redirect(url_for('admin_usuarios'))
 
 
-# ---------------------- DASHBOARD OFICIAL ----------------------
+# ---------------------- DASHBOARDS ----------------------
 
 @app.route('/oficial/dashboard')
 @login_required
 def oficial_dashboard():
     if current_user.role != 'Usuario':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        logout_user()
+        return redirect(url_for('login'))
     return render_template('usuario_dashboard.html', user=current_user)
 
-
-# ---------------------- DASHBOARD TECNICO ----------------------
 
 @app.route('/tecnico/dashboard')
 @login_required
 def tecnico_dashboard():
     if current_user.role != 'Tecnico':
-        flash("Acceso denegado. Rol incorrecto.", "danger")
-        return redirect(url_for('dashboard'))
+        logout_user()
+        return redirect(url_for('login'))
 
     base_query_equipo = EquipoReporte.query.filter(
         EquipoReporte.estado.in_(['Pendiente', 'En Progreso'])
@@ -341,11 +332,9 @@ def tecnico_dashboard():
         PatrullaReporte.estado.in_(['Pendiente', 'En Progreso'])
     )
 
-    sector_filtro = current_user.sector
-
-    if sector_filtro and sector_filtro != 'Global':
-        base_query_equipo = base_query_equipo.filter_by(sector=sector_filtro)
-        base_query_patrulla = base_query_patrulla.filter_by(sector=sector_filtro)
+    if current_user.sector and current_user.sector != 'Global':
+        base_query_equipo = base_query_equipo.filter_by(sector=current_user.sector)
+        base_query_patrulla = base_query_patrulla.filter_by(sector=current_user.sector)
 
     pendientes_equipo = base_query_equipo.order_by(EquipoReporte.fecha_reporte.asc()).all()
     pendientes_patrulla = base_query_patrulla.order_by(PatrullaReporte.fecha_reporte.asc()).all()
@@ -356,7 +345,7 @@ def tecnico_dashboard():
                            pendientes_patrulla=pendientes_patrulla)
 
 
-# ---------------------- REPORTE EQUIPO ----------------------
+# ---------------------- REPORTES ----------------------
 
 @app.route('/reporte_equipo', methods=['GET', 'POST'])
 @login_required
@@ -398,13 +387,11 @@ def reporte_equipo_form():
     return render_template('reporte_equipo_form.html')
 
 
-# ---------------------- REPORTE PATRULLA ----------------------
-
 @app.route('/reporte/patrulla', methods=['GET', 'POST'])
 @login_required
 def reporte_patrulla_form():
     if current_user.role not in ['Tecnico', 'Admin']:
-        flash('Acceso denegado. Solo el personal técnico puede realizar inspecciones.', 'danger')
+        flash('Acceso denegado.', 'danger')
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
@@ -419,7 +406,7 @@ def reporte_patrulla_form():
             fecha_reporte_str = request.form.get('fecha_reporte')
 
             if not all([unidad_numero, oficial_nombre, placa, marca, modelo, turno, sector_unidad]):
-                flash('Faltan campos obligatorios en la información de la unidad.', 'danger')
+                flash('Faltan campos obligatorios.', 'danger')
                 return render_template('reporte_patrulla_form.html', user=current_user)
 
             try:
@@ -436,7 +423,6 @@ def reporte_patrulla_form():
             for i in range(1, 5):
                 cam_funciona = request.form.get(f'camara_{i}') == '1'
                 componentes_status[f'camara{i}_funciona'] = cam_funciona
-
                 if not cam_funciona:
                     todas_ok = False
                     detalle = request.form.get(f'falla_camara_desc_{i}', '').strip()
@@ -450,7 +436,6 @@ def reporte_patrulla_form():
 
                 grab_funciona = request.form.get(f'grabadora_{i}') == '1'
                 componentes_status[f'grabadora{i}_funciona'] = grab_funciona
-
                 if not grab_funciona:
                     todas_ok = False
                     detalle = request.form.get(f'falla_grabadora_desc_{i}', '').strip()
@@ -492,7 +477,6 @@ def reporte_patrulla_form():
 
             db.session.add(nuevo_reporte)
             db.session.commit()
-
             flash(f"Inspección de unidad {unidad_numero} guardada correctamente.", "success")
             return redirect(url_for('tecnico_dashboard'))
 
@@ -505,8 +489,6 @@ def reporte_patrulla_form():
     return render_template('reporte_patrulla_form.html', user=current_user)
 
 
-# ---------------------- MIS REPORTES ----------------------
-
 @app.route('/mis_reportes')
 @login_required
 def mis_reportes():
@@ -516,18 +498,16 @@ def mis_reportes():
 
     equipos = EquipoReporte.query.filter_by(user_id=current_user.id).order_by(EquipoReporte.fecha_reporte.desc()).all()
     patrullas = PatrullaReporte.query.filter_by(user_id=current_user.id).order_by(PatrullaReporte.fecha_reporte.desc()).all()
-
     return render_template('mis_reportes.html', user=current_user, equipos=equipos, patrullas=patrullas)
 
 
-# ---------------------- EDITAR REPORTE DE EQUIPO ----------------------
+# ---------------------- EDITAR REPORTES ----------------------
 
 @app.route('/reporte/equipo/editar/<int:reporte_id>', methods=['GET', 'POST'])
 @login_required
 def editar_reporte_equipo(reporte_id):
     if current_user.role not in ['Admin', 'Tecnico']:
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     reporte = EquipoReporte.query.get_or_404(reporte_id)
 
@@ -549,10 +529,7 @@ def editar_reporte_equipo(reporte_id):
 
             db.session.commit()
             flash(f"✅ Reporte #{reporte_id} actualizado con éxito.", "success")
-
-            if current_user.role == 'Admin':
-                return redirect(url_for('admin_dashboard'))
-            return redirect(url_for('tecnico_dashboard'))
+            return redirect(url_for('admin_dashboard') if current_user.role == 'Admin' else url_for('tecnico_dashboard'))
 
         except Exception as e:
             db.session.rollback()
@@ -563,14 +540,11 @@ def editar_reporte_equipo(reporte_id):
     return render_template('editar_reporte_equipo.html', reporte=reporte)
 
 
-# ---------------------- EDITAR REPORTE DE PATRULLA ----------------------
-
 @app.route('/reporte/patrulla/editar/<int:reporte_id>', methods=['GET', 'POST'])
 @login_required
 def editar_reporte_patrulla(reporte_id):
     if current_user.role not in ['Admin', 'Tecnico']:
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     reporte = PatrullaReporte.query.get_or_404(reporte_id)
 
@@ -584,19 +558,13 @@ def editar_reporte_patrulla(reporte_id):
             p = guardar_foto(foto_rep)
             if p:
                 reporte.foto_reparado_path = p
-
         try:
             reporte.estado = 'Reparado'
             if reporte.fecha_reparacion is None:
                 reporte.fecha_reparacion = datetime.datetime.utcnow()
-
             db.session.commit()
             flash(f"Reporte de Patrulla #{reporte.id} actualizado a REPARADO.", "success")
-
-            if current_user.role == 'Admin':
-                return redirect(url_for('admin_ver_patrullas'))
-            return redirect(url_for('tecnico_dashboard'))
-
+            return redirect(url_for('admin_ver_patrullas') if current_user.role == 'Admin' else url_for('tecnico_dashboard'))
         except Exception as e:
             db.session.rollback()
             flash("Error al actualizar el reporte.", "danger")
@@ -606,92 +574,84 @@ def editar_reporte_patrulla(reporte_id):
     return render_template('editar_reporte_patrulla.html', reporte=reporte, user=current_user)
 
 
-# ---------------------- CAMBIAR ESTADO PATRULLA ----------------------
+# ---------------------- ADMIN: CAMBIAR ESTADOS ----------------------
 
 @app.route('/admin/reportes/patrulla/<int:reporte_id>/estado', methods=['POST'])
 @login_required
 def cambiar_estado_reporte_patrulla(reporte_id):
     if current_user.role != 'Admin':
-        flash('Acceso denegado.', 'danger')
-        return redirect(url_for('dashboard'))
-
+        return redirect(url_for('login'))
     try:
         nuevo_estado = request.form.get('estado')
-        estados_validos = ['Pendiente', 'En Proceso', 'Cerrado']
-        if nuevo_estado not in estados_validos:
+        if nuevo_estado not in ['Pendiente', 'En Proceso', 'Cerrado']:
             flash('Estado no válido', 'danger')
             return redirect(url_for('admin_ver_patrullas'))
-
         reporte = PatrullaReporte.query.get_or_404(reporte_id)
         reporte.estado = nuevo_estado
-
         if nuevo_estado == 'Cerrado' and reporte.fecha_reparacion is None:
             reporte.fecha_reparacion = datetime.datetime.utcnow()
-
         db.session.commit()
         flash(f'Estado del reporte #{reporte_id} actualizado a "{nuevo_estado}"', 'success')
-
     except Exception as e:
         db.session.rollback()
-        flash(f'Error al actualizar el estado: {str(e)}', 'danger')
-
+        flash(f'Error: {str(e)}', 'danger')
     return redirect(url_for('admin_ver_patrullas'))
 
-
-# ---------------------- ELIMINAR REPORTE PATRULLA ----------------------
 
 @app.route('/admin/reportes/patrulla/<int:reporte_id>/eliminar', methods=['POST'])
 @login_required
 def eliminar_reporte_patrulla(reporte_id):
     if current_user.role != 'Admin':
-        flash('Acceso denegado.', 'danger')
-        return redirect(url_for('dashboard'))
-
+        return redirect(url_for('login'))
     try:
         reporte = PatrullaReporte.query.get_or_404(reporte_id)
         unidad = reporte.unidad_numero
         db.session.delete(reporte)
         db.session.commit()
         flash(f'Reporte de la unidad {unidad} eliminado correctamente', 'success')
-
     except Exception as e:
         db.session.rollback()
-        flash(f'Error al eliminar el reporte: {str(e)}', 'danger')
-
+        flash(f'Error: {str(e)}', 'danger')
     return redirect(url_for('admin_ver_patrullas'))
 
-
-# ---------------------- CAMBIAR ESTADO EQUIPO ----------------------
 
 @app.route('/admin/reportes/equipo/<int:reporte_id>/estado', methods=['POST'])
 @login_required
 def cambiar_estado_reporte_equipo(reporte_id):
     if current_user.role != 'Admin':
-        flash('Acceso denegado.', 'danger')
-        return redirect(url_for('dashboard'))
-
+        return redirect(url_for('login'))
     try:
         nuevo_estado = request.form.get('estado')
-        estados_validos = ['Pendiente', 'En Progreso', 'Reparado', 'Cerrado']
-        if nuevo_estado not in estados_validos:
+        if nuevo_estado not in ['Pendiente', 'En Progreso', 'Reparado', 'Cerrado']:
             flash('Estado no válido', 'danger')
             return redirect(url_for('admin_ver_equipos'))
-
         reporte = EquipoReporte.query.get_or_404(reporte_id)
         reporte.estado = nuevo_estado
-
         if nuevo_estado in ['Reparado', 'Cerrado'] and reporte.fecha_reparacion is None:
             reporte.fecha_reparacion = datetime.datetime.utcnow()
         elif nuevo_estado in ['Pendiente', 'En Progreso']:
             reporte.fecha_reparacion = None
-
         db.session.commit()
         flash(f'Estado del reporte #{reporte_id} actualizado a "{nuevo_estado}"', 'success')
-
     except Exception as e:
         db.session.rollback()
-        flash(f'Error al actualizar el estado: {str(e)}', 'danger')
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(url_for('admin_ver_equipos'))
 
+
+@app.route('/admin/eliminar/equipo/<int:reporte_id>', methods=['POST'])
+@login_required
+def admin_eliminar_reporte_equipo(reporte_id):
+    if current_user.role != 'Admin':
+        return redirect(url_for('login'))
+    reporte = EquipoReporte.query.get_or_404(reporte_id)
+    try:
+        db.session.delete(reporte)
+        db.session.commit()
+        flash(f"Reporte de Equipo ID {reporte_id} eliminado.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash("Error al eliminar el reporte.", "danger")
     return redirect(url_for('admin_ver_equipos'))
 
 
@@ -702,13 +662,10 @@ def cambiar_estado_reporte_equipo(reporte_id):
 def api_actualizar_estado_patrulla(reporte_id):
     if current_user.role != 'Admin':
         return jsonify({"error": "No autorizado"}), 403
-
     reporte = PatrullaReporte.query.get_or_404(reporte_id)
     data = request.get_json()
-
     if not data or 'estado' not in data:
         return jsonify({"error": "Datos inválidos"}), 400
-
     try:
         reporte.estado = data['estado']
         db.session.commit()
@@ -723,9 +680,7 @@ def api_actualizar_estado_patrulla(reporte_id):
 def api_eliminar_reporte_patrulla(reporte_id):
     if current_user.role != 'Admin':
         return jsonify({"error": "No autorizado"}), 403
-
     reporte = PatrullaReporte.query.get_or_404(reporte_id)
-
     try:
         db.session.delete(reporte)
         db.session.commit()
@@ -735,70 +690,40 @@ def api_eliminar_reporte_patrulla(reporte_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------------- ELIMINAR EQUIPO ----------------------
-
-@app.route('/admin/eliminar/equipo/<int:reporte_id>', methods=['POST'])
-@login_required
-def admin_eliminar_reporte_equipo(reporte_id):
-    if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
-
-    reporte = EquipoReporte.query.get_or_404(reporte_id)
-
-    try:
-        db.session.delete(reporte)
-        db.session.commit()
-        flash(f"Reporte de Equipo ID {reporte_id} eliminado.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash("Error al eliminar el reporte.", "danger")
-
-    return redirect(url_for('admin_ver_equipos'))
-
-
-# ---------------------- VER EQUIPOS ADMIN ----------------------
+# ---------------------- VISTAS ADMIN ----------------------
 
 @app.route('/admin/ver_equipos')
 @login_required
 def admin_ver_equipos():
     if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
-
+        return redirect(url_for('login'))
     reportes = db.session.query(EquipoReporte, User)\
         .join(User, EquipoReporte.user_id == User.id)\
         .order_by(EquipoReporte.fecha_reporte.desc())\
         .all()
-
     return render_template('admin_reportes_equipos.html', user=current_user, reportes=reportes)
 
-
-# ---------------------- VER PATRULLAS ADMIN ----------------------
 
 @app.route('/admin/ver_patrullas')
 @login_required
 def admin_ver_patrullas():
     if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
-        return redirect(url_for('dashboard'))
-
+        return redirect(url_for('login'))
     reportes_patrulla = (
         db.session.query(PatrullaReporte, User)
         .join(User)
         .order_by(PatrullaReporte.fecha_reporte.desc())
         .all()
     )
-
     return render_template('admin_reportes_patrullas.html', user=current_user, reportes_patrulla=reportes_patrulla)
 
 
-# --- INICIALIZACIÓN ---
+# ---------------------- INICIALIZACIÓN ----------------------
+
 with app.app_context():
     try:
         db.create_all()
-        admin_existente = User.query.filter_by(username='admin').first()
-        if not admin_existente:
+        if not User.query.filter_by(username='admin').first():
             nuevo_admin = User(username='admin', role='Admin', sector='Sistemas')
             nuevo_admin.set_password('admin123')
             db.session.add(nuevo_admin)
@@ -808,7 +733,6 @@ with app.app_context():
             logger.info("ℹ️ El administrador ya existe.")
     except Exception as e:
         logger.error(f"❌ Error al inicializar: {e}")
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
