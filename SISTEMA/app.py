@@ -312,19 +312,17 @@ def admin_eliminar_usuario(user_id):
 @app.route('/oficial/dashboard')
 @login_required
 def oficial_dashboard():
+    # Si no es Usuario, redirigir a la función central, no al login
     if current_user.role != 'Usuario':
-        logout_user()
-        return redirect(url_for('login'))
+        return redirect(url_for('dashboard')) 
     return render_template('usuario_dashboard.html', user=current_user)
-
 
 @app.route('/tecnico/dashboard')
 @login_required
 def tecnico_dashboard():
+    # Si no es Tecnico, redirigir a la función central
     if current_user.role != 'Tecnico':
-        logout_user()
-        return redirect(url_for('login'))
-
+        return redirect(url_for('dashboard'))
     base_query_equipo = EquipoReporte.query.filter(
         EquipoReporte.estado.in_(['Pendiente', 'En Progreso'])
     )
@@ -720,7 +718,7 @@ def admin_ver_patrullas():
 
 # ---------------------- INICIALIZACIÓN -------------3---------
 
-#with app.app_context():
+with app.app_context():
     try:
         db.create_all()
         if not User.query.filter_by(username='admin').first():
