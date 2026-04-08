@@ -30,7 +30,6 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave_segura_tickets')
 
-# --- COOKIES (UN SOLO BLOQUE, SIN DUPLICADOS) ---
 app.config.update(
     SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
@@ -129,6 +128,7 @@ class PatrullaReporte(db.Model):
     falla_grabadora_foto_4 = db.Column(db.String(255))
     user = db.relationship('User', backref=db.backref('patrulla_reportes', lazy=True))
 
+
 def guardar_foto(foto):
     if foto and foto.filename != '':
         try:
@@ -142,9 +142,11 @@ def guardar_foto(foto):
             app.logger.error(f"Error al guardar foto: {e}")
     return None
 
+
 @app.context_processor
 def inject_now():
     return {'now': datetime.datetime.utcnow}
+
 
 # ---------------------- RUTAS ----------------------
 
@@ -153,6 +155,7 @@ def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -174,27 +177,35 @@ def login():
 
     return render_template('login.html')
 
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.role == 'Admin':
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+
+    role = current_user.role  # Guardar antes de cualquier logout
+
+    if role == 'Admin':
         return redirect(url_for('admin_dashboard'))
-    elif current_user.role == 'Tecnico':
+    elif role == 'Tecnico':
         return redirect(url_for('tecnico_dashboard'))
-    elif current_user.role == 'Usuario':
+    elif role == 'Usuario':
         return redirect(url_for('oficial_dashboard'))
     else:
+        flash(f'Rol "{role}" no reconocido. Contacta al administrador.', 'danger')
         logout_user()
-        flash(f'Rol "{current_user.role}" no reconocido. Contacta al administrador.', 'danger')
         return redirect(url_for('login'))
+
 
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    if current_user.role != 'Admin':
+    if not current_user.is_authenticated or current_user.role != 'Admin':
         logout_user()
         return redirect(url_for('login'))
     return render_template('admin_dashboard.html', user=current_user)
+
 
 @app.route('/logout')
 @login_required
@@ -203,13 +214,13 @@ def logout():
     flash("Sesión cerrada.", "success")
     return redirect(url_for('login'))
 
+
 # ---------------------- ADMIN USUARIOS ----------------------
 
 @app.route('/admin/usuarios', methods=['GET', 'POST'])
 @login_required
 def admin_usuarios():
     if current_user.role != 'Admin':
-        flash("Acceso denegado.", "danger")
         return redirect(url_for('login'))
 
     if request.method == 'POST':
@@ -312,17 +323,31 @@ def admin_eliminar_usuario(user_id):
 @app.route('/oficial/dashboard')
 @login_required
 def oficial_dashboard():
-    # Si no es Usuario, redirigir a la función central, no al login
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
     if current_user.role != 'Usuario':
-        return redirect(url_for('dashboard')) 
+        role = current_user.role
+        if role == 'Admin':
+            return redirect(url_for('admin_dashboard'))
+        elif role == 'Tecnico':
+            return redirect(url_for('tecnico_dashboard'))
+        return redirect(url_for('login'))
     return render_template('usuario_dashboard.html', user=current_user)
+
 
 @app.route('/tecnico/dashboard')
 @login_required
 def tecnico_dashboard():
-    # Si no es Tecnico, redirigir a la función central
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
     if current_user.role != 'Tecnico':
-        return redirect(url_for('dashboard'))
+        role = current_user.role
+        if role == 'Admin':
+            return redirect(url_for('admin_dashboard'))
+        elif role == 'Usuario':
+            return redirect(url_for('oficial_dashboard'))
+        return redirect(url_for('login'))
+
     base_query_equipo = EquipoReporte.query.filter(
         EquipoReporte.estado.in_(['Pendiente', 'En Progreso'])
     )
@@ -390,7 +415,7 @@ def reporte_equipo_form():
 def reporte_patrulla_form():
     if current_user.role not in ['Tecnico', 'Admin']:
         flash('Acceso denegado.', 'danger')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     if request.method == 'POST':
         try:
@@ -491,8 +516,7 @@ def reporte_patrulla_form():
 @login_required
 def mis_reportes():
     if current_user.role != 'Usuario':
-        flash('Acceso denegado.', 'danger')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('login'))
 
     equipos = EquipoReporte.query.filter_by(user_id=current_user.id).order_by(EquipoReporte.fecha_reporte.desc()).all()
     patrullas = PatrullaReporte.query.filter_by(user_id=current_user.id).order_by(PatrullaReporte.fecha_reporte.desc()).all()
@@ -716,7 +740,7 @@ def admin_ver_patrullas():
     return render_template('admin_reportes_patrullas.html', user=current_user, reportes_patrulla=reportes_patrulla)
 
 
-# ---------------------- INICIALIZACIÓN -------------3---------
+# ---------------------- INICIALIZACIÓN ----------------------
 
 with app.app_context():
     try:
@@ -731,6 +755,7 @@ with app.app_context():
             logger.info("ℹ️ El administrador ya existe.")
     except Exception as e:
         logger.error(f"❌ Error al inicializar: {e}")
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
