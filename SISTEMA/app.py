@@ -739,16 +739,18 @@ def admin_ver_patrullas():
     )
     return render_template('admin_reportes_patrullas.html', user=current_user, reportes_patrulla=reportes_patrulla)
 
-@app.route('/reset-admin-temp')
-def reset_admin():
+@app.route('/fix-admin-temp')
+def fix_admin():
     try:
         admin = User.query.filter_by(username='admin').first()
         if admin:
-            admin.set_password('admin123')
+            admin.role = 'Admin'        # Corregir mayúscula
+            admin.set_password('admin123')  # Resetear contraseña también
             db.session.commit()
-            return "✅ Contraseña reseteada. Entra con admin / admin123. BORRA ESTA RUTA DESPUÉS."
+            return "✅ Listo. Entra con admin / admin123. BORRA ESTA RUTA DESPUÉS."
         return "❌ Usuario admin no encontrado."
     except Exception as e:
+        db.session.rollback()
         return f"❌ Error: {str(e)}"
 
 # ---------------------- INICIALIZACIÓN ----------------------
