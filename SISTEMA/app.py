@@ -718,9 +718,9 @@ def admin_ver_patrullas():
     return render_template('admin_reportes_patrullas.html', user=current_user, reportes_patrulla=reportes_patrulla)
 
 
-# ---------------------- INICIALIZACIÓN ----------------------
+# ---------------------- INICIALIZACIÓN -------------3---------
 
-with app.app_context():
+#with app.app_context():
     try:
         db.create_all()
         if not User.query.filter_by(username='admin').first():
